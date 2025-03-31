@@ -1,9 +1,11 @@
 replicaCount: 2
 
 image:
-  repository: go-api
+  repository: gcr.io/june-api-455423/june-api
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
+  pullSecrets:
+    - name: gcr-pull-secret
 
 nameOverride: ""
 fullnameOverride: ""

@@ -1,4 +1,4 @@
-project_id   = "your-gcp-project-id"
-region       = "us-central1"
-cluster_name = "your-gke-cluster"
-repo_name    = "your-go-app"
+project_id   = "june-api-455423"
+region       = "europe-west3"
+cluster_name = "june-api-1"
+repo_name    = "June"

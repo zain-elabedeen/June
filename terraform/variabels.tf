@@ -4,20 +4,20 @@ variable "project_id" {
 
 variable "region" {
   type    = string
-  default = "us-central1"
+  default = "europe-west3"
 }
 
 variable "zones" {
   type    = list(string)
-  default = ["us-central1-a", "us-central1-b"]
+  default = ["europe-west3-a", "europe-west3-b", " europe-west3-c"]
 }
 
 variable "cluster_name" {
   type    = string
-  default = "your-gke-cluster"
+  default = "june-api-1"
 }
 
 variable "repo_name" {
   type    = string
-  default = "your-go-app"
+  default = "June"
 }
