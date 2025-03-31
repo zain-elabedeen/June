@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "go-api.fullname" . }}-config
+  labels:
+    {{- include "go-api.labels" . | nindent 4 }}
+data:
+  GIN_MODE: {{ .Values.config.ginMode | quote }}
+  PORT: {{ .Values.config.port | quote }} 
