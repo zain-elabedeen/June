@@ -28,7 +28,7 @@ type Config struct {
 }
 
 // LoadConfig reads configuration from file or environment variables.
-func LoadConfig(path string) (config Config, err error) {
+func LoadConfig(paths ...string) (config Config, err error) {
 	// Set default values
 	viper.SetDefault("GIN_MODE", "debug")
 	viper.SetDefault("SERVER_PORT", "8080")
@@ -53,19 +53,20 @@ func LoadConfig(path string) (config Config, err error) {
 	vp.BindEnv("API_BASE_URL")
 
 	// If a config file path is provided, try to read it
-	if path != "" {
-		vp.AddConfigPath(path)  // Path to look for the config file in
+	if len(paths) > 0 && paths[0] != "" {
+		for _, path := range paths {
+			vp.AddConfigPath(path)
+		}
 		vp.SetConfigName("app") // Name of config file (without extension)
 		vp.SetConfigType("env") // Look for .env file
 		// Example: /path/to/config/app.env
 
 		if err = vp.ReadInConfig(); err != nil {
+			// Ignore error if file not found, continue to load environment variables
 			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 				// Config file was found but another error was produced
 				return Config{}, fmt.Errorf("failed to read config file: %w", err)
 			}
-			// Config file not found; ignore error if path was explicitly set but file not found
-			// We'll rely on environment variables in this case
 		}
 	}
 

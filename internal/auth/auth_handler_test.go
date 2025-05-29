@@ -10,33 +10,38 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
+	"io/ioutil"
+
 	"github.com/gin-gonic/gin"
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/google/uuid"
+	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
 var testDB *sql.DB
-var testRouter *gin.Engine
+var testRouter *gin.Engine // Keep router for potential direct handler testing if needed, but won't be used for API calls
 var testCfg config.Config
+var apiBaseURL string
 
 // TestMain sets up the test environment (DB, router) and tears it down.
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
 
-	// Load test configuration (consider a separate .env.test or environment variables)
-	// For simplicity, we'll use some defaults here or try to load from existing config logic
-	cfg, err := config.LoadConfig("../../.env") // Adjust path if your .env is elsewhere or use test-specific config
+	// Load test configuration from .env.test or .env
+	cfg, err := config.LoadConfig(".", "..") // Look for app.env (i.e., .env.test or .env) in current dir and parent
 	if err != nil {
 		log.Fatalf("Failed to load test config: %v", err)
 	}
 	testCfg = cfg
-	// Override DB settings for test database if necessary
-	// e.g., testCfg.DBName = "test_june_db"
+
+	// Set the API base URL for tests
+	apiBaseURL = testCfg.APIBaseURL
+	if apiBaseURL == "" {
+		apiBaseURL = "http://localhost:8080" // Default to the port exposed by docker-compose
+	}
 
 	// Connect to test database
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
@@ -47,11 +52,17 @@ func TestMain(m *testing.M) {
 	}
 	testDB = db
 
+	// Check DB connection
+	if err = testDB.Ping(); err != nil {
+		log.Fatalf("Failed to ping test database: %v", err)
+	}
+	log.Println("Successfully connected to test database")
+
 	// Optional: Run migrations - This requires your migration tool/logic to be callable.
 	// For now, we assume the schema is managed or migrations are run manually for the test DB.
 	// If you have a migration function: migrations.Run(testDB, "../../db/migrations")
 
-	// Setup router
+	// Setup router (kept for potential direct handler testing, but not used for API calls in this refactor)
 	testRouter = gin.New()
 	authHandler := auth.NewAuthHandler(testDB, testCfg)
 	authRoutes := testRouter.Group("/api/v1/auth")
@@ -89,20 +100,33 @@ func clearRefreshTokensTable() {
 	}
 }
 
-func makeRequest(method, url string, body interface{}) *httptest.ResponseRecorder {
+// makeHttpRequest sends an actual HTTP request to the running API server.
+func makeHttpRequest(method, path string, body interface{}) (*http.Response, error) {
+	url := apiBaseURL + path
 	var reqBody *bytes.Buffer
 	if body != nil {
-		jsonBody, _ := json.Marshal(body)
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		}
 		reqBody = bytes.NewBuffer(jsonBody)
 	} else {
 		reqBody = bytes.NewBuffer([]byte{})
 	}
 
-	req, _ := http.NewRequest(method, url, reqBody)
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	testRouter.ServeHTTP(rr, req)
-	return rr
+
+	client := &http.Client{} // Configure client with timeouts etc. as needed
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform HTTP request to %s: %w", url, err)
+	}
+
+	return resp, nil
 }
 
 func TestUserRegistration_Success(t *testing.T) {
@@ -117,16 +141,23 @@ func TestUserRegistration_Success(t *testing.T) {
 		// Phone: optional, can add if needed for test coverage
 	}
 
-	rr := makeRequest("POST", "/api/v1/auth/register", registrationData)
+	// Use the new function to hit the running API container
+	rr, err := makeHttpRequest("POST", "/api/v1/auth/register", registrationData)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer rr.Body.Close()
 
-	if status := rr.Code; status != http.StatusCreated {
+	if status := rr.StatusCode; status != http.StatusCreated {
+		bodyBytes, _ := ioutil.ReadAll(rr.Body)
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-		t.Logf("Response body: %s", rr.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var responseUser models.User
-	if err := json.Unmarshal(rr.Body.Bytes(), &responseUser); err != nil {
+	bodyBytes, _ := ioutil.ReadAll(rr.Body)
+	if err := json.Unmarshal(bodyBytes, &responseUser); err != nil {
 		t.Fatalf("Failed to unmarshal response body: %v", err)
 	}
 
@@ -156,7 +187,7 @@ func TestUserRegistration_Success(t *testing.T) {
 	// Optionally, verify in DB
 	var dbPasswordHash, dbFullName, dbEmail string
 	var dbRole models.UserRole
-	err := testDB.QueryRow("SELECT email, full_name, password_hash, role FROM users WHERE id = $1", responseUser.ID).Scan(&dbEmail, &dbFullName, &dbPasswordHash, &dbRole)
+	err = testDB.QueryRow("SELECT email, full_name, password_hash, role FROM users WHERE id = $1", responseUser.ID).Scan(&dbEmail, &dbFullName, &dbPasswordHash, &dbRole)
 	if err != nil {
 		t.Fatalf("Failed to query user from DB: %v", err)
 	}
@@ -185,9 +216,14 @@ func TestUserRegistration_Failure_DuplicateEmail(t *testing.T) {
 		Email:    "duplicate@example.com",
 		Password: "Password123!",
 	}
-	rr1 := makeRequest("POST", "/api/v1/auth/register", user1Data)
-	if status := rr1.Code; status != http.StatusCreated {
-		t.Fatalf("First registration failed: got status %v, want %v. Body: %s", status, http.StatusCreated, rr1.Body.String())
+	rr1, err1 := makeHttpRequest("POST", "/api/v1/auth/register", user1Data)
+	if err1 != nil {
+		t.Fatalf("First registration failed: %v", err1)
+	}
+	defer rr1.Body.Close()
+	if status := rr1.StatusCode; status != http.StatusCreated {
+		bodyBytes, _ := ioutil.ReadAll(rr1.Body)
+		t.Fatalf("First registration failed: got status %v, want %v. Body: %s", status, http.StatusCreated, string(bodyBytes))
 	}
 
 	// Second registration with the same email (should fail)
@@ -196,16 +232,22 @@ func TestUserRegistration_Failure_DuplicateEmail(t *testing.T) {
 		Email:    "duplicate@example.com", // Same email
 		Password: "Password456!",
 	}
-	rr2 := makeRequest("POST", "/api/v1/auth/register", user2Data)
+	rr2, err2 := makeHttpRequest("POST", "/api/v1/auth/register", user2Data)
+	if err2 != nil {
+		t.Fatalf("Failed to make second registration request: %v", err2)
+	}
+	defer rr2.Body.Close()
 
-	if status := rr2.Code; status != http.StatusConflict {
+	if status := rr2.StatusCode; status != http.StatusConflict {
+		bodyBytes, _ := ioutil.ReadAll(rr2.Body)
 		t.Errorf("handler returned wrong status code for duplicate email: got %v want %v", status, http.StatusConflict)
-		t.Logf("Response body: %s", rr2.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]string
-	if err := json.Unmarshal(rr2.Body.Bytes(), &errorResponse); err != nil {
+	bodyBytes, _ := ioutil.ReadAll(rr2.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
 		t.Fatalf("Failed to unmarshal error response body: %v", err)
 	}
 
@@ -225,17 +267,23 @@ func TestUserRegistration_Failure_ShortPassword(t *testing.T) {
 		Password: "short", // Password less than 8 characters
 	}
 
-	rr := makeRequest("POST", "/api/v1/auth/register", registrationData)
+	rr, err := makeHttpRequest("POST", "/api/v1/auth/register", registrationData)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer rr.Body.Close()
 
-	if status := rr.Code; status != http.StatusBadRequest {
+	if status := rr.StatusCode; status != http.StatusBadRequest {
+		bodyBytes, _ := ioutil.ReadAll(rr.Body)
 		t.Errorf("handler returned wrong status code for short password: got %v want %v", status, http.StatusBadRequest)
-		t.Logf("Response body: %s", rr.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{} // Gin's default validation errors can be more complex
-	if err := json.Unmarshal(rr.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rr.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rr.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	// Gin's validation error messages for binding often include field names and validation tags.
@@ -250,7 +298,8 @@ func TestUserRegistration_Failure_ShortPassword(t *testing.T) {
 			t.Errorf("Expected error message to contain 'Password' and 'min', got: %s", errMessage)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rr.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rr.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
 
@@ -264,17 +313,23 @@ func TestUserRegistration_Failure_InvalidEmail(t *testing.T) {
 		Password: "Password123!",
 	}
 
-	rr := makeRequest("POST", "/api/v1/auth/register", registrationData)
+	rr, err := makeHttpRequest("POST", "/api/v1/auth/register", registrationData)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer rr.Body.Close()
 
-	if status := rr.Code; status != http.StatusBadRequest {
+	if status := rr.StatusCode; status != http.StatusBadRequest {
+		bodyBytes, _ := ioutil.ReadAll(rr.Body)
 		t.Errorf("handler returned wrong status code for invalid email: got %v want %v", status, http.StatusBadRequest)
-		t.Logf("Response body: %s", rr.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rr.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rr.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	// Check for error message related to email validation
@@ -287,7 +342,8 @@ func TestUserRegistration_Failure_InvalidEmail(t *testing.T) {
 			t.Errorf("Expected error message to contain 'Email' and 'email' tag, got: %s", errMessage)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rr.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rr.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
 
@@ -301,12 +357,19 @@ func TestUserLogin_Success(t *testing.T) {
 		Email:    "login_succ@example.com",
 		Password: "Password123!",
 	}
-	rrReg := makeRequest("POST", "/api/v1/auth/register", registrationData)
-	if status := rrReg.Code; status != http.StatusCreated {
-		t.Fatalf("Registration prerequisite for login test failed: got status %v, want %v. Body: %s", status, http.StatusCreated, rrReg.Body.String())
+	rrReg, errReg := makeHttpRequest("POST", "/api/v1/auth/register", registrationData)
+	if errReg != nil {
+		t.Fatalf("Failed to make registration request: %v", errReg)
+	}
+	defer rrReg.Body.Close()
+
+	if statusReg := rrReg.StatusCode; statusReg != http.StatusCreated {
+		bodyBytes, _ := ioutil.ReadAll(rrReg.Body)
+		t.Fatalf("Registration prerequisite for login test failed: got status %v, want %v. Body: %s", statusReg, http.StatusCreated, string(bodyBytes))
 	}
 	var registeredUser models.User
-	if err := json.Unmarshal(rrReg.Body.Bytes(), &registeredUser); err != nil {
+	bodyBytesReg, _ := ioutil.ReadAll(rrReg.Body)
+	if err := json.Unmarshal(bodyBytesReg, &registeredUser); err != nil {
 		t.Fatalf("Failed to unmarshal registration response: %v", err)
 	}
 
@@ -315,17 +378,23 @@ func TestUserLogin_Success(t *testing.T) {
 		Email:    registrationData.Email,
 		Password: registrationData.Password,
 	}
-	rrLogin := makeRequest("POST", "/api/v1/auth/login", loginData)
+	rrLogin, errLogin := makeHttpRequest("POST", "/api/v1/auth/login", loginData)
+	if errLogin != nil {
+		t.Fatalf("Failed to make login request: %v", errLogin)
+	}
+	defer rrLogin.Body.Close()
 
-	if status := rrLogin.Code; status != http.StatusOK {
+	if status := rrLogin.StatusCode; status != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
 		t.Errorf("Login handler returned wrong status code: got %v want %v", status, http.StatusOK)
-		t.Logf("Response body: %s", rrLogin.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var tokenResponse models.TokenResponse
-	if err := json.Unmarshal(rrLogin.Body.Bytes(), &tokenResponse); err != nil {
-		t.Fatalf("Failed to unmarshal login response body: %v. Body: %s", err, rrLogin.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+	if err := json.Unmarshal(bodyBytes, &tokenResponse); err != nil {
+		t.Fatalf("Failed to unmarshal login response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	if tokenResponse.AccessToken == "" {
@@ -360,9 +429,15 @@ func TestUserLogin_Failure_InvalidCredentials(t *testing.T) {
 		Email:    "invalidcreds@example.com",
 		Password: "Password123!",
 	}
-	rrReg := makeRequest("POST", "/api/v1/auth/register", registrationData)
-	if status := rrReg.Code; status != http.StatusCreated {
-		t.Fatalf("Registration prerequisite for login test failed: got status %v, want %v. Body: %s", status, http.StatusCreated, rrReg.Body.String())
+	rrReg, errReg := makeHttpRequest("POST", "/api/v1/auth/register", registrationData)
+	if errReg != nil {
+		t.Fatalf("Failed to make registration request: %v", errReg)
+	}
+	defer rrReg.Body.Close()
+
+	if statusReg := rrReg.StatusCode; statusReg != http.StatusCreated {
+		bodyBytes, _ := ioutil.ReadAll(rrReg.Body)
+		t.Fatalf("Registration prerequisite for login test failed: got status %v, want %v. Body: %s", statusReg, http.StatusCreated, string(bodyBytes))
 	}
 
 	// 2. Attempt to log in with invalid password
@@ -370,17 +445,23 @@ func TestUserLogin_Failure_InvalidCredentials(t *testing.T) {
 		Email:    registrationData.Email,
 		Password: "WrongPassword!",
 	}
-	rrLogin := makeRequest("POST", "/api/v1/auth/login", loginData)
+	rrLogin, errLogin := makeHttpRequest("POST", "/api/v1/auth/login", loginData)
+	if errLogin != nil {
+		t.Fatalf("Failed to make login request: %v", errLogin)
+	}
+	defer rrLogin.Body.Close()
 
-	if status := rrLogin.Code; status != http.StatusUnauthorized {
+	if status := rrLogin.StatusCode; status != http.StatusUnauthorized {
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
 		t.Errorf("Login handler returned wrong status code for invalid credentials: got %v want %v", status, http.StatusUnauthorized)
-		t.Logf("Response body: %s", rrLogin.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{}
-	if err := json.Unmarshal(rrLogin.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rrLogin.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	if message, ok := errorResponse["message"].(string); ok {
@@ -392,7 +473,8 @@ func TestUserLogin_Failure_InvalidCredentials(t *testing.T) {
 			t.Errorf("Expected error message to indicate invalid credentials, got: %s", errVal)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rrLogin.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
 
@@ -405,17 +487,23 @@ func TestUserLogin_Failure_UserNotFound(t *testing.T) {
 		Email:    "nonexistentuser@example.com",
 		Password: "Password123!",
 	}
-	rrLogin := makeRequest("POST", "/api/v1/auth/login", loginData)
+	rrLogin, errLogin := makeHttpRequest("POST", "/api/v1/auth/login", loginData)
+	if errLogin != nil {
+		t.Fatalf("Failed to make login request: %v", errLogin)
+	}
+	defer rrLogin.Body.Close()
 
-	if status := rrLogin.Code; status != http.StatusUnauthorized { // Or http.StatusNotFound, depending on desired behavior
+	if status := rrLogin.StatusCode; status != http.StatusUnauthorized { // Or http.StatusNotFound, depending on desired behavior
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
 		t.Errorf("Login handler returned wrong status code for non-existent user: got %v want %v", status, http.StatusUnauthorized)
-		t.Logf("Response body: %s", rrLogin.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{}
-	if err := json.Unmarshal(rrLogin.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rrLogin.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	// General message for non-existent user or bad creds to avoid user enumeration
@@ -428,7 +516,8 @@ func TestUserLogin_Failure_UserNotFound(t *testing.T) {
 			t.Errorf("Expected error message to indicate invalid credentials (for non-existent user), got: %s", errVal)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rrLogin.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
 
@@ -441,17 +530,23 @@ func TestUserLogin_Failure_MissingEmail(t *testing.T) {
 		// Email is intentionally omitted
 		Password: "Password123!",
 	}
-	rrLogin := makeRequest("POST", "/api/v1/auth/login", loginData)
+	rrLogin, errLogin := makeHttpRequest("POST", "/api/v1/auth/login", loginData)
+	if errLogin != nil {
+		t.Fatalf("Failed to make login request: %v", errLogin)
+	}
+	defer rrLogin.Body.Close()
 
-	if status := rrLogin.Code; status != http.StatusBadRequest {
+	if status := rrLogin.StatusCode; status != http.StatusBadRequest {
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
 		t.Errorf("Login handler returned wrong status code for missing email: got %v want %v", status, http.StatusBadRequest)
-		t.Logf("Response body: %s", rrLogin.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{}
-	if err := json.Unmarshal(rrLogin.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rrLogin.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	if message, ok := errorResponse["message"].(string); ok {
@@ -463,7 +558,8 @@ func TestUserLogin_Failure_MissingEmail(t *testing.T) {
 			t.Errorf("Expected error message to indicate missing email, got: %s", errVal)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rrLogin.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
 
@@ -476,17 +572,23 @@ func TestUserLogin_Failure_MissingPassword(t *testing.T) {
 		Email: "missingpassword@example.com",
 		// Password is intentionally omitted
 	}
-	rrLogin := makeRequest("POST", "/api/v1/auth/login", loginData)
+	rrLogin, errLogin := makeHttpRequest("POST", "/api/v1/auth/login", loginData)
+	if errLogin != nil {
+		t.Fatalf("Failed to make login request: %v", errLogin)
+	}
+	defer rrLogin.Body.Close()
 
-	if status := rrLogin.Code; status != http.StatusBadRequest {
+	if status := rrLogin.StatusCode; status != http.StatusBadRequest {
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
 		t.Errorf("Login handler returned wrong status code for missing password: got %v want %v", status, http.StatusBadRequest)
-		t.Logf("Response body: %s", rrLogin.Body.String())
+		t.Logf("Response body: %s", string(bodyBytes))
 		return
 	}
 
 	var errorResponse map[string]interface{}
-	if err := json.Unmarshal(rrLogin.Body.Bytes(), &errorResponse); err != nil {
-		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, rrLogin.Body.String())
+	bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+	if err := json.Unmarshal(bodyBytes, &errorResponse); err != nil {
+		t.Fatalf("Failed to unmarshal error response body: %v. Body: %s", err, string(bodyBytes))
 	}
 
 	if message, ok := errorResponse["message"].(string); ok {
@@ -498,6 +600,7 @@ func TestUserLogin_Failure_MissingPassword(t *testing.T) {
 			t.Errorf("Expected error message to indicate missing password, got: %s", errVal)
 		}
 	} else {
-		t.Errorf("Expected error message in response, but got: %v", rrLogin.Body.String())
+		bodyBytes, _ := ioutil.ReadAll(rrLogin.Body)
+		t.Errorf("Expected error message in response, but got: %v", string(bodyBytes))
 	}
 }
