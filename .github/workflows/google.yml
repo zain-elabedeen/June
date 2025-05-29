@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
+      image_name_with_tag: gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE }}:${{ github.sha }}
 
     steps:
     - name: Checkout Repository
@@ -52,12 +53,55 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Set Image Tag
+    - name: Set Image Tag (for Helm deployment)
       id: tag
-      run: echo "tag=latest" >> $GITHUB_OUTPUT
+      run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Authenticate with Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GKE_SA_KEY }}
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Build Go application (for running tests locally)
+      run: go build ./...
+
+    - name: Run services with Docker Compose
+      run: |
+        export API_IMAGE_NAME=${{ needs.build.outputs.image_name_with_tag }}
+        docker-compose up -d db api
+
+    - name: Wait for API and Database to be healthy
+      run: |
+        docker-compose ps
+        docker-compose healthcheck db
+        docker-compose healthcheck api
+
+    - name: Run Go Tests
+      run: |
+        go test -v ./...
+
+    - name: Stop services
+      if: always()
+      run: docker-compose down
 
   deploy:
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
 
     steps:
