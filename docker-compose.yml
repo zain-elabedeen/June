@@ -6,13 +6,59 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "3000:8080"
+    depends_on:
+      db_migration:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy # Wait for DB to be healthy
     environment:
-      - GIN_MODE=release
+      GIN_MODE: debug
+      SERVER_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: june_user
+      DB_PASSWORD: june_password
+      DB_NAME: june_db
+      DB_SSLMODE: disable
+      JWT_ACCESS_SECRET: your_strong_jwt_access_secret_here_CHANGE_ME
+      JWT_REFRESH_SECRET: your_strong_jwt_refresh_secret_here_CHANGE_ME
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "http://localhost:8080/health" ]
+      test: [ "CMD", "wget", "--spider", "http://localhost:8080/health" ] # Assuming /health is your health check endpoint
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "54321:5432" # Expose Postgres on host port 54321 to avoid conflicts if 54320 is used
+    environment:
+      POSTGRES_USER: june_user
+      POSTGRES_PASSWORD: june_password
+      POSTGRES_DB: june_db
+    volumes:
+      - june_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U june_user -d june_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db_migration:
+    image: migrate/migrate # Using official migrate/migrate image
+    volumes:
+      - ./db/migrations:/migrations # Mount your migration files
+    # The command will apply all up migrations
+    # Ensure the DB_SOURCE URL is correct for your setup
+    # The format is: postgresql://user:password@host:port/dbname?sslmode=disable
+    command: ["-path", "/migrations", "-database",  "postgres://june_user:june_password@db:5432/june_db?sslmode=disable", "up"]
+    depends_on:
+      db: # Ensure db service is healthy before migrations begin
+        condition: service_healthy
+    # restart: on-failure # Optional: retry migrations if they fail
+
+volumes:
+  june_postgres_data:
