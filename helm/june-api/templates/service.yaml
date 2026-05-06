@@ -12,5 +12,5 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "june-api.selectorLabels" . | nindent 4 }} 
-    
+    {{- include "june-api.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api

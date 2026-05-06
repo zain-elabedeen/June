@@ -1,0 +1,34 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: june-api
+build:
+  local:
+    push: false
+  artifacts:
+    - image: june-api
+      docker:
+        dockerfile: Dockerfile
+    - image: june-api-migrations
+      docker:
+        dockerfile: Dockerfile.migrations
+deploy:
+  helm:
+    releases:
+      - name: june-api
+        chartPath: helm/june-api
+        namespace: june
+        createNamespace: true
+        valuesFiles:
+          - helm/june-api/values-local.yaml
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_june_api}}"
+          image.tag: "{{.IMAGE_TAG_june_api}}"
+          migrations.image.repository: "{{.IMAGE_REPO_june_api_migrations}}"
+          migrations.image.tag: "{{.IMAGE_TAG_june_api_migrations}}"
+portForward:
+  - resourceType: service
+    resourceName: june-api
+    namespace: june
+    port: 80
+    localPort: 8080

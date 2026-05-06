@@ -1,0 +1,3 @@
+FROM migrate/migrate:4
+
+COPY db/migrations /migrations

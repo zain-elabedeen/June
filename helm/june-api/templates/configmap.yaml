@@ -6,4 +6,12 @@ metadata:
     {{- include "june-api.labels" . | nindent 4 }}
 data:
   GIN_MODE: {{ .Values.config.ginMode | quote }}
-  PORT: {{ .Values.config.port | quote }} 
+  SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  DB_HOST: {{ .Values.config.db.host | quote }}
+  DB_PORT: {{ .Values.config.db.port | quote }}
+  DB_USER: {{ .Values.config.db.user | quote }}
+  DB_NAME: {{ .Values.config.db.name | quote }}
+  DB_SSLMODE: {{ .Values.config.db.sslMode | quote }}
+  JWT_ACCESS_EXP_MINUTES: {{ .Values.config.jwt.accessExpMinutes | quote }}
+  JWT_REFRESH_EXP_DAYS: {{ .Values.config.jwt.refreshExpDays | quote }}
+  API_BASE_URL: {{ .Values.config.apiBaseUrl | quote }}

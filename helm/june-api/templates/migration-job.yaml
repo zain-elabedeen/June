@@ -1,0 +1,55 @@
+{{- if .Values.migrations.enabled }}
+{{- if and (not .Values.secrets.create) (not .Values.secrets.existingSecret) }}
+{{- fail "migrations.enabled requires secrets.create=true or secrets.existingSecret to provide DB_PASSWORD and JWT secrets" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "june-api.migrations.fullname" . }}
+  labels:
+    {{- include "june-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  {{- with .Values.migrations.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "june-api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-postgresql
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "june-api.fullname" . }}-config
+            - secretRef:
+                name: {{ include "june-api.secretName" . }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; do
+                sleep 2
+              done
+      containers:
+        - name: migrate
+          image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
+          imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "june-api.fullname" . }}-config
+            - secretRef:
+                name: {{ include "june-api.secretName" . }}
+          args:
+            - -path
+            - /migrations
+            - -database
+            - postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSLMODE)
+            - up
+{{- end }}

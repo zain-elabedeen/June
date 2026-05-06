@@ -1,0 +1,45 @@
+replicaCount: 1
+
+image:
+  repository: june-api
+  tag: dev
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 8080
+
+config:
+  ginMode: debug
+  serverPort: "8080"
+  apiBaseUrl: http://localhost:8080
+  db:
+    host: june-api-postgresql
+    port: "5432"
+    user: june_user
+    name: june_db
+    sslMode: disable
+  jwt:
+    accessExpMinutes: "15"
+    refreshExpDays: "7"
+
+secrets:
+  create: true
+  dbPassword: june_password
+  jwtAccessSecret: local_access_secret_change_me
+  jwtRefreshSecret: local_refresh_secret_change_me
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 1Gi
+
+migrations:
+  enabled: true
+  image:
+    repository: june-api-migrations
+    tag: dev
+    pullPolicy: IfNotPresent

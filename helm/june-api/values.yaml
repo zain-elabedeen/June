@@ -25,7 +25,48 @@ resources:
 
 config:
   ginMode: "release"
-  port: "8080"
+  serverPort: "8080"
+  apiBaseUrl: ""
+  db:
+    host: ""
+    port: "5432"
+    user: ""
+    name: ""
+    sslMode: "disable"
+  jwt:
+    accessExpMinutes: "15"
+    refreshExpDays: "7"
+
+secrets:
+  create: false
+  existingSecret: ""
+  dbPassword: ""
+  jwtAccessSecret: ""
+  jwtRefreshSecret: ""
+
+postgresql:
+  enabled: false
+  image:
+    repository: postgres
+    tag: 15-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    username: june_user
+    database: june_db
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 1Gi
+
+migrations:
+  enabled: false
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: june-api-migrations
+    tag: dev
+    pullPolicy: IfNotPresent
 
 probes:
   liveness:
@@ -33,4 +74,4 @@ probes:
     periodSeconds: 10
   readiness:
     initialDelaySeconds: 5
-    periodSeconds: 10 
+    periodSeconds: 10

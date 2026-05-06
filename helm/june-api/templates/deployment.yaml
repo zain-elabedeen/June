@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         {{- include "june-api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
     spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
@@ -21,16 +22,18 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.config.port | int }}
+              containerPort: {{ .Values.config.serverPort | int }}
               protocol: TCP
-          env:
-            - name: GIN_MODE
-              value: {{ .Values.config.ginMode | quote }}
-            - name: PORT
-              value: {{ .Values.config.port | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "june-api.fullname" . }}-config
+            {{- if or .Values.secrets.create .Values.secrets.existingSecret }}
+            - secretRef:
+                name: {{ include "june-api.secretName" . }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -44,4 +47,4 @@ spec:
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }} 
+            {{- toYaml .Values.resources | nindent 12 }}
