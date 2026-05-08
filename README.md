@@ -49,7 +49,7 @@ make status
 make local-down
 ```
 
-To generate Arch Agent test data, run one of the deterministic scenarios:
+To generate test data, run one of the deterministic scenarios:
 
 ```bash
 make scenarios
@@ -62,7 +62,7 @@ To generate more traffic for the currently deployed scenario:
 make loadgen LOADGEN_DURATION=300
 ```
 
-Scenario details live in `docs/archagent-scenarios.md`. Arch Agent should collect the `june-sim` namespace for these local runs.
+Scenario details live in `docs/archagent-scenarios.md`
 
 If you have Skaffold installed, you can also run:
 
@@ -89,7 +89,7 @@ The main simulation target is:
 GET /api/v1/sim/work
 ```
 
-Every request emits a JSON log line to stdout with fields Arch Agent already normalizes:
+Every request emits a JSON log line to stdout
 
 ```json
 {
@@ -102,12 +102,6 @@ Every request emits a JSON log line to stdout with fields Arch Agent already nor
   "error_type": "server_error",
   "message": "simulated server error"
 }
-```
-
-For local Arch Agent runs, scope collection to the simulator namespace:
-
-```bash
-export ARCHAGENT_K8S_INCLUDE_NAMESPACES=june-sim
 ```
 
 ## Scenarios
@@ -175,7 +169,7 @@ The loadgen Job targets:
 http://june-api:80/api/v1/sim/work
 ```
 
-Failed HTTP responses do not fail the Job. That is intentional because scenarios such as `high-error-rate`, `timeout-pressure`, and `dependency-instability` are supposed to produce 500/503/504 responses for Arch Agent to analyze.
+Failed HTTP responses do not fail the Job. That is intentional because scenarios such as `high-error-rate`, `timeout-pressure`, and `dependency-instability` are supposed to produce 500/503/504 responses.
 
 ## API Endpoints
 
