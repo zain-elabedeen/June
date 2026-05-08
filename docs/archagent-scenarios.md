@@ -1,6 +1,6 @@
-# Arch Agent Simulation Scenarios
+# Simulation Scenarios
 
-June API can run deterministic local Kubernetes scenarios that generate Kubernetes metrics and JSON request logs.
+June can run deterministic local Kubernetes scenarios that generate Kubernetes metrics and JSON request logs.
 
 Use a dedicated namespace so to collect only this test system:
 
