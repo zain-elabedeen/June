@@ -17,7 +17,7 @@ deploy:
     releases:
       - name: june-api
         chartPath: helm/june-api
-        namespace: june
+        namespace: june-sim
         createNamespace: true
         valuesFiles:
           - helm/june-api/values-local.yaml
@@ -29,6 +29,6 @@ deploy:
 portForward:
   - resourceType: service
     resourceName: june-api
-    namespace: june
+    namespace: june-sim
     port: 80
-    localPort: 8080
+    localPort: 9000

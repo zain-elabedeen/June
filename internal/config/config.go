@@ -25,32 +25,63 @@ type Config struct {
 	JWTAccessTokenExpiry  int    `mapstructure:"JWT_ACCESS_EXP_MINUTES"` // Added for access token expiry
 	JWTRefreshTokenExpiry int    `mapstructure:"JWT_REFRESH_EXP_DAYS"`   // Added for refresh token expiry
 	APIBaseURL            string `mapstructure:"API_BASE_URL"`
+	ServiceName           string `mapstructure:"JUNE_SERVICE_NAME"`
+	SimEnabled            bool   `mapstructure:"JUNE_SIM_ENABLED"`
+	SimProfile            string `mapstructure:"JUNE_SIM_PROFILE"`
+	SimErrorEvery         int    `mapstructure:"JUNE_SIM_ERROR_EVERY"`
+	SimLatencyMs          int    `mapstructure:"JUNE_SIM_LATENCY_MS"`
+	SimTimeoutEvery       int    `mapstructure:"JUNE_SIM_TIMEOUT_EVERY"`
+	SimDependencyEvery    int    `mapstructure:"JUNE_SIM_DEPENDENCY_ERROR_EVERY"`
+	SimCPUBurnMs          int    `mapstructure:"JUNE_SIM_CPU_BURN_MS"`
+	SimMemoryMB           int    `mapstructure:"JUNE_SIM_MEMORY_MB"`
+	SimCrashAfterRequests int    `mapstructure:"JUNE_SIM_CRASH_AFTER_REQUESTS"`
+	SimProbeFailureEvery  int    `mapstructure:"JUNE_SIM_PROBE_FAILURE_EVERY"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
 func LoadConfig(paths ...string) (config Config, err error) {
-	// Set default values
-	viper.SetDefault("GIN_MODE", "debug")
-	viper.SetDefault("SERVER_PORT", "8080")
-	viper.SetDefault("DB_SSLMODE", "disable")
-	viper.SetDefault("JWT_ACCESS_EXP_MINUTES", 15)
-	viper.SetDefault("JWT_REFRESH_EXP_DAYS", 7)
-
 	vp := viper.New()
-	// Explicitly bind environment variables
-	vp.BindEnv("GIN_MODE")
-	vp.BindEnv("SERVER_PORT")
-	vp.BindEnv("DB_HOST")
-	vp.BindEnv("DB_PORT")
-	vp.BindEnv("DB_USER")
-	vp.BindEnv("DB_PASSWORD")
-	vp.BindEnv("DB_NAME")
-	vp.BindEnv("DB_SSLMODE")
-	vp.BindEnv("JWT_ACCESS_SECRET")
-	vp.BindEnv("JWT_REFRESH_SECRET")
-	vp.BindEnv("JWT_ACCESS_EXP_MINUTES")
-	vp.BindEnv("JWT_REFRESH_EXP_DAYS")
-	vp.BindEnv("API_BASE_URL")
+
+	// Set default values
+	vp.SetDefault("GIN_MODE", "debug")
+	vp.SetDefault("SERVER_PORT", "8080")
+	vp.SetDefault("DB_SSLMODE", "disable")
+	vp.SetDefault("JWT_ACCESS_EXP_MINUTES", 15)
+	vp.SetDefault("JWT_REFRESH_EXP_DAYS", 7)
+	vp.SetDefault("JUNE_SERVICE_NAME", "june-api")
+	vp.SetDefault("JUNE_SIM_ENABLED", false)
+	vp.SetDefault("JUNE_SIM_PROFILE", "baseline")
+
+	for _, key := range []string{
+		"GIN_MODE",
+		"SERVER_PORT",
+		"DB_HOST",
+		"DB_PORT",
+		"DB_USER",
+		"DB_PASSWORD",
+		"DB_NAME",
+		"DB_SSLMODE",
+		"JWT_ACCESS_SECRET",
+		"JWT_REFRESH_SECRET",
+		"JWT_ACCESS_EXP_MINUTES",
+		"JWT_REFRESH_EXP_DAYS",
+		"API_BASE_URL",
+		"JUNE_SERVICE_NAME",
+		"JUNE_SIM_ENABLED",
+		"JUNE_SIM_PROFILE",
+		"JUNE_SIM_ERROR_EVERY",
+		"JUNE_SIM_LATENCY_MS",
+		"JUNE_SIM_TIMEOUT_EVERY",
+		"JUNE_SIM_DEPENDENCY_ERROR_EVERY",
+		"JUNE_SIM_CPU_BURN_MS",
+		"JUNE_SIM_MEMORY_MB",
+		"JUNE_SIM_CRASH_AFTER_REQUESTS",
+		"JUNE_SIM_PROBE_FAILURE_EVERY",
+	} {
+		if bindErr := vp.BindEnv(key); bindErr != nil {
+			return Config{}, fmt.Errorf("failed to bind env %s: %w", key, bindErr)
+		}
+	}
 
 	// If a config file path is provided, try to read it
 	if len(paths) > 0 && paths[0] != "" {

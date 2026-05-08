@@ -1,0 +1,22 @@
+replicaCount: 2
+
+archagent:
+  dependsOn: "db:june-api-postgresql,http:june-payments,http:june-email,http:june-search,http:june-cache"
+
+simulation:
+  enabled: true
+  profile: baseline
+
+mockDependencies:
+  enabled: true
+  items:
+    - name: june-payments
+    - name: june-email
+    - name: june-search
+    - name: june-cache
+
+loadgen:
+  enabled: true
+  requests: 220
+  workers: 5
+

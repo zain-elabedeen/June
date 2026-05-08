@@ -7,6 +7,7 @@ metadata:
 data:
   GIN_MODE: {{ .Values.config.ginMode | quote }}
   SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  JUNE_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
   DB_HOST: {{ .Values.config.db.host | quote }}
   DB_PORT: {{ .Values.config.db.port | quote }}
   DB_USER: {{ .Values.config.db.user | quote }}
@@ -15,3 +16,13 @@ data:
   JWT_ACCESS_EXP_MINUTES: {{ .Values.config.jwt.accessExpMinutes | quote }}
   JWT_REFRESH_EXP_DAYS: {{ .Values.config.jwt.refreshExpDays | quote }}
   API_BASE_URL: {{ .Values.config.apiBaseUrl | quote }}
+  JUNE_SIM_ENABLED: {{ .Values.simulation.enabled | quote }}
+  JUNE_SIM_PROFILE: {{ .Values.simulation.profile | quote }}
+  JUNE_SIM_ERROR_EVERY: {{ .Values.simulation.errorEvery | quote }}
+  JUNE_SIM_LATENCY_MS: {{ .Values.simulation.latencyMs | quote }}
+  JUNE_SIM_TIMEOUT_EVERY: {{ .Values.simulation.timeoutEvery | quote }}
+  JUNE_SIM_DEPENDENCY_ERROR_EVERY: {{ .Values.simulation.dependencyErrorEvery | quote }}
+  JUNE_SIM_CPU_BURN_MS: {{ .Values.simulation.cpuBurnMs | quote }}
+  JUNE_SIM_MEMORY_MB: {{ .Values.simulation.memoryMB | quote }}
+  JUNE_SIM_CRASH_AFTER_REQUESTS: {{ .Values.simulation.crashAfterRequests | quote }}
+  JUNE_SIM_PROBE_FAILURE_EVERY: {{ .Values.simulation.probeFailureEvery | quote }}

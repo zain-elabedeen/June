@@ -1,0 +1,58 @@
+{{- if .Values.mockDependencies.enabled }}
+{{- range .Values.mockDependencies.items }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  labels:
+    helm.sh/chart: {{ include "june-api.chart" $ }}
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/component: mock-dependency
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: mock-dependency
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .name }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: mock-dependency
+    spec:
+      containers:
+        - name: mock
+          image: "{{ $.Values.mockDependencies.image.repository }}:{{ $.Values.mockDependencies.image.tag }}"
+          imagePullPolicy: {{ $.Values.mockDependencies.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - sleep 3600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels:
+    helm.sh/chart: {{ include "june-api.chart" $ }}
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/component: mock-dependency
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ default 8080 .port }}
+      targetPort: {{ default 8080 .port }}
+  selector:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: mock-dependency
+{{- end }}
+{{- end }}

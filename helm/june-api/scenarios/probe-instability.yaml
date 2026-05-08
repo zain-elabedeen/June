@@ -1,0 +1,20 @@
+replicaCount: 2
+
+simulation:
+  enabled: true
+  profile: probe-instability
+  probeFailureEvery: "2"
+
+probes:
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    initialDelaySeconds: 2
+    periodSeconds: 5
+
+loadgen:
+  enabled: true
+  requests: 160
+  workers: 4
+

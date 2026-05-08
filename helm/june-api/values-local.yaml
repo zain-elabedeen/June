@@ -14,7 +14,8 @@ service:
 config:
   ginMode: debug
   serverPort: "8080"
-  apiBaseUrl: http://localhost:8080
+  apiBaseUrl: http://localhost:9000
+  serviceName: june-api
   db:
     host: june-api-postgresql
     port: "5432"
@@ -24,6 +25,10 @@ config:
   jwt:
     accessExpMinutes: "15"
     refreshExpDays: "7"
+
+simulation:
+  enabled: true
+  profile: baseline
 
 secrets:
   create: true
@@ -36,6 +41,9 @@ postgresql:
   persistence:
     enabled: true
     size: 1Gi
+
+waitForDatabase:
+  enabled: true
 
 migrations:
   enabled: true

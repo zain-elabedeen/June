@@ -84,14 +84,26 @@ Name of the migration job for this Helm release revision.
 Labels for the optional local PostgreSQL resources.
 */}}
 {{- define "june-api.postgresql.labels" -}}
-{{ include "june-api.labels" . }}
-app.kubernetes.io/component: postgresql
+helm.sh/chart: {{ include "june-api.chart" . }}
+{{ include "june-api.postgresql.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
 Selector labels for the optional local PostgreSQL resources.
 */}}
 {{- define "june-api.postgresql.selectorLabels" -}}
-{{ include "june-api.selectorLabels" . }}
+app.kubernetes.io/name: {{ include "june-api.postgresql.fullname" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: postgresql
+{{- end }}
+
+{{/*
+Name of the load generator job for this Helm release revision.
+*/}}
+{{- define "june-api.loadgen.fullname" -}}
+{{- printf "%s-loadgen-%v" (include "june-api.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
 {{- end }}

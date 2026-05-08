@@ -1,0 +1,12 @@
+replicaCount: 1
+
+simulation:
+  enabled: true
+  profile: crash-loop
+  crashAfterRequests: "15"
+
+loadgen:
+  enabled: true
+  requests: 120
+  workers: 3
+

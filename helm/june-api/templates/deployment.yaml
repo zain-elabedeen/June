@@ -11,6 +11,10 @@ spec:
       {{- include "june-api.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- if .Values.archagent.dependsOn }}
+      annotations:
+        archagent.io/depends-on: {{ .Values.archagent.dependsOn | quote }}
+      {{- end }}
       labels:
         {{- include "june-api.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
@@ -18,6 +22,26 @@ spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.waitForDatabase.enabled }}
+      initContainers:
+        - name: wait-for-database
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "june-api.fullname" . }}-config
+            {{- if or .Values.secrets.create .Values.secrets.existingSecret }}
+            - secretRef:
+                name: {{ include "june-api.secretName" . }}
+            {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; do
+                sleep 2
+              done
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -42,7 +66,7 @@ spec:
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}

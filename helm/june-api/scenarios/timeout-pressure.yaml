@@ -1,0 +1,13 @@
+replicaCount: 2
+
+simulation:
+  enabled: true
+  profile: timeout-pressure
+  latencyMs: "1100"
+  timeoutEvery: "3"
+
+loadgen:
+  enabled: true
+  requests: 300
+  workers: 6
+

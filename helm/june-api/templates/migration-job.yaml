@@ -17,7 +17,8 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "june-api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "june-api.fullname" . }}-migrations
+        app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: migrations
     spec:
       restartPolicy: Never

@@ -1,0 +1,11 @@
+replicaCount: 1
+
+simulation:
+  enabled: true
+  profile: baseline
+
+loadgen:
+  enabled: true
+  requests: 160
+  workers: 4
+

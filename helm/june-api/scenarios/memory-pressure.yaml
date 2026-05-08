@@ -1,0 +1,20 @@
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+simulation:
+  enabled: true
+  profile: memory-pressure
+  memoryMB: "190"
+
+loadgen:
+  enabled: true
+  requests: 80
+  workers: 2
+

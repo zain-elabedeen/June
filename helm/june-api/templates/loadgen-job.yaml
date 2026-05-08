@@ -1,0 +1,86 @@
+{{- if .Values.loadgen.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "june-api.loadgen.fullname" . }}
+  labels:
+    {{- include "june-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loadgen
+spec:
+  backoffLimit: {{ .Values.loadgen.backoffLimit }}
+  {{- with .Values.loadgen.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "june-api.fullname" . }}-loadgen
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: loadgen
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-api
+          image: "{{ .Values.loadgen.image.repository }}:{{ .Values.loadgen.image.tag }}"
+          imagePullPolicy: {{ .Values.loadgen.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until wget -qO- --timeout={{ .Values.loadgen.timeoutSeconds }} http://{{ include "june-api.fullname" . }}:{{ .Values.service.port }}/health >/dev/null; do
+                sleep 2
+              done
+      containers:
+        - name: loadgen
+          image: "{{ .Values.loadgen.image.repository }}:{{ .Values.loadgen.image.tag }}"
+          imagePullPolicy: {{ .Values.loadgen.image.pullPolicy }}
+          env:
+            - name: TARGET_URL
+              value: http://{{ include "june-api.fullname" . }}:{{ .Values.service.port }}{{ .Values.loadgen.route }}
+            - name: REQUESTS
+              value: {{ .Values.loadgen.requests | quote }}
+            - name: DURATION_SECONDS
+              value: {{ .Values.loadgen.durationSeconds | quote }}
+            - name: WORKERS
+              value: {{ .Values.loadgen.workers | quote }}
+            - name: TIMEOUT_SECONDS
+              value: {{ .Values.loadgen.timeoutSeconds | quote }}
+            - name: DELAY_SECONDS
+              value: {{ .Values.loadgen.delaySeconds | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              run_request() {
+                wget -qO- --timeout="$TIMEOUT_SECONDS" "$TARGET_URL" >/dev/null || true
+                if [ "$DELAY_SECONDS" != "0" ]; then
+                  sleep "$DELAY_SECONDS"
+                fi
+              }
+
+              per_worker=$(( (REQUESTS + WORKERS - 1) / WORKERS ))
+              end_at=0
+              if [ "$DURATION_SECONDS" -gt 0 ]; then
+                end_at=$(( $(date +%s) + DURATION_SECONDS ))
+              fi
+
+              worker=0
+              while [ "$worker" -lt "$WORKERS" ]; do
+                (
+                  if [ "$DURATION_SECONDS" -gt 0 ]; then
+                    while [ "$(date +%s)" -lt "$end_at" ]; do
+                      run_request
+                    done
+                  else
+                    i=0
+                    while [ "$i" -lt "$per_worker" ]; do
+                      run_request
+                      i=$((i + 1))
+                    done
+                  fi
+                ) &
+                worker=$((worker + 1))
+              done
+              wait
+{{- end }}

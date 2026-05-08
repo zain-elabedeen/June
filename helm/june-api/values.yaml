@@ -27,6 +27,7 @@ config:
   ginMode: "release"
   serverPort: "8080"
   apiBaseUrl: ""
+  serviceName: june-api
   db:
     host: ""
     port: "5432"
@@ -36,6 +37,21 @@ config:
   jwt:
     accessExpMinutes: "15"
     refreshExpDays: "7"
+
+simulation:
+  enabled: false
+  profile: baseline
+  errorEvery: "0"
+  latencyMs: "0"
+  timeoutEvery: "0"
+  dependencyErrorEvery: "0"
+  cpuBurnMs: "0"
+  memoryMB: "0"
+  crashAfterRequests: "0"
+  probeFailureEvery: "0"
+
+archagent:
+  dependsOn: ""
 
 secrets:
   create: false
@@ -59,6 +75,9 @@ postgresql:
     enabled: true
     size: 1Gi
 
+waitForDatabase:
+  enabled: false
+
 migrations:
   enabled: false
   backoffLimit: 3
@@ -66,6 +85,29 @@ migrations:
   image:
     repository: june-api-migrations
     tag: dev
+    pullPolicy: IfNotPresent
+
+mockDependencies:
+  enabled: false
+  image:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  items: []
+
+loadgen:
+  enabled: false
+  durationSeconds: 0
+  requests: 250
+  workers: 5
+  route: /api/v1/sim/work
+  timeoutSeconds: 2
+  delaySeconds: 0
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: busybox
+    tag: "1.36"
     pullPolicy: IfNotPresent
 
 probes:

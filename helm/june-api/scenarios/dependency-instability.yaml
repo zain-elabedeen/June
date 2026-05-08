@@ -1,0 +1,12 @@
+replicaCount: 2
+
+simulation:
+  enabled: true
+  profile: dependency-instability
+  dependencyErrorEvery: "3"
+
+loadgen:
+  enabled: true
+  requests: 300
+  workers: 6
+
