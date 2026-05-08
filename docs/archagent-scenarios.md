@@ -1,8 +1,8 @@
 # Arch Agent Simulation Scenarios
 
-June API can run deterministic local Kubernetes scenarios that generate Kubernetes metrics and JSON request logs for Arch Agent.
+June API can run deterministic local Kubernetes scenarios that generate Kubernetes metrics and JSON request logs.
 
-Use a dedicated namespace so Arch Agent can collect only this test system:
+Use a dedicated namespace so to collect only this test system:
 
 ```bash
 export ARCHAGENT_K8S_INCLUDE_NAMESPACES=june-sim
@@ -54,7 +54,7 @@ make scenarios
 
 ## Scenario Matrix
 
-| Scenario | Generated behavior | Primary Arch Agent evidence |
+| Scenario | Generated behavior | Primary Agent evidence |
 | --- | --- | --- |
 | `baseline` | Normal `/api/v1/sim/work` requests | Healthy request logs, service topology |
 | `high-error-rate` | Every fifth simulation request returns HTTP 500 | `error_rate`, `status_5xx_rate`, `error_burst`, `high_error_rate` |
@@ -68,9 +68,8 @@ make scenarios
 | `single-instance` | API runs with one replica | `single_instance_risk` |
 | `coupling-risk` | API is annotated as depending on DB plus four mock services | topology edges, `coupling_risk` |
 
-## What Arch Agent Reads
 
-The API emits JSON logs shaped for the existing Arch Agent log normalizer:
+The API emits JSON logs:
 
 ```json
 {
