@@ -1,6 +1,6 @@
-# June API
+# June LoadGen 
 
-June API is a Go/Gin API used for local Kubernetes deployment experiments and Arch Agent telemetry simulation.
+June is a Load generator used for Infrastructure deployment experiments.
 
 ## Project Structure
 
