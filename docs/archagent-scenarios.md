@@ -85,4 +85,4 @@ The API emits JSON logs:
 }
 ```
 
-The Helm chart also labels API, PostgreSQL, load generator, and mock dependency pods distinctly so Arch Agent can build a cleaner service graph from Kubernetes labels.
+The Helm chart also labels API, PostgreSQL, load generator, and mock dependency pods distinctly to build a cleaner service graph from Kubernetes labels.
