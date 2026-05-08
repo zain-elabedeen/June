@@ -1,6 +1,6 @@
 # June LoadGen 
 
-June is a Load generator used for Infrastructure deployment experiments.
+June is a Load generator used for Kubernetes deployment experiments.
 
 ## Project Structure
 
@@ -72,9 +72,9 @@ skaffold dev
 
 Local settings live in `helm/june-api/values-local.yaml`. Production defaults keep local PostgreSQL and migrations disabled, so your GCP database setup can continue to use external values/secrets.
 
-## Arch Agent Simulator
+## Simulator
 
-June API includes a deterministic simulator for generating Kubernetes metrics and pod logs that Arch Agent can ingest.
+June includes a deterministic simulator for generating Kubernetes metrics and pod logs.
 
 The simulator is controlled by environment variables rendered from Helm values:
 
