@@ -1,6 +1,6 @@
 # June LoadGen 
 
-June is a Load generator used for Kubernetes deployment experiments.
+June is a Kubernetes simulator and load generation tool for testing deployment strategies and infrastructure behavior.
 
 ## Project Structure
 
